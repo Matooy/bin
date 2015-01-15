@@ -1,0 +1,34 @@
+#!/bin/bash
+
+echo $SHELL | fgrep zsh
+
+sshx() {
+  TMPDIR=~/.ssh-tmp
+
+  if [ ! -d $TMPDIR ];then
+    mkdir $TMPDIR
+  fi
+
+  case "$(uname -s)" in
+    "Linux" ) tmp_fifo=$(mktemp -u --suffix=._ssh_fifo) ;;
+    "Darwin") tmp_fifo=$(mktemp -u -t ._ssh_fifo) ;;
+
+    *)
+      echo 'Bye.'
+      exit
+      ;;
+  esac
+
+  # cleanup first
+  if [ -d $TMPDIR ];then
+    rm -rf $TMPDIR 2>/dev/null && mkdir $TMPDIR
+  fi
+
+  mkfifo "$tmp_fifo"
+  cat ~/.ssh/configs/* >"$tmp_fifo" 2>/dev/null &
+  ssh -F "$tmp_fifo" "$@"
+  _cache_hosts=$(ssh-hosts)
+  rm "$tmp_fifo"
+}
+
+sshx $*

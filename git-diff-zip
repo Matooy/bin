@@ -1,0 +1,59 @@
+#!/bin/bash
+
+
+function git_diff_archive(){
+
+  PROJECT_NAME=$(basename `pwd`)
+  CUR_DATE=$(date +"%Y%m%d-%H%M%S")
+
+  if [ ! -e $(pwd)"/.git" ];then
+    echo "You must be at repository directory's root."
+    exit
+  fi
+
+  echo "Your PWD is "$(pwd)
+
+  local diff=""
+  local h="HEAD"
+  if [ $# -eq 1 ]; then
+    if expr "$1" : '[0-9]*' > /dev/null ; then
+      diff="HEAD HEAD~"$1
+    else
+      diff="HEAD "$1
+    fi
+  elif [ $# -eq 2 ]; then
+    diff="${1} ${2}"
+    h=$1
+  fi
+
+  if [ "$diff" != "" ];then
+    diff="git diff --name-only $diff --diff-filter=ACMRT"
+  fi
+
+  echo "Archiving..."
+  echo ""
+  echo "Files [ "$diff" ]"
+  echo "----------------------------------"
+  LIST=$($diff)
+  echo "$LIST"
+  echo "----------------------------------"
+  echo ""
+  echo "Are these files correct diff? [(y)es/(n)o/(e)dit]"
+
+  read INPUT > /dev/null
+
+  if [ $INPUT == 'n' ];then
+    echo "Process aborted."
+    exit
+  fi
+
+  ZIP_NAME="${PROJECT_NAME}_${CUR_DATE}"
+
+  eval "zip -re ~/Downloads/"$ZIP_NAME".zip \$("$diff")"
+
+  echo ""
+  echo "Zipped diff files saved to ~/Downloads/"$ZIP_NAME
+
+}
+
+git_diff_archive $1

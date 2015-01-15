@@ -1,0 +1,422 @@
+#!/usr/local/bin/zsh
+
+#
+# bc required!!
+#
+
+
+progressorX(){
+
+  local TITLE;TITLE='
+
+
+   ______                                                      _     _
+  (_____ \                                                    (_)   (_)
+   _____) )___ ___   ____  ____ _____  ___  ___  ___   ____      ___
+  |  ____/ ___) _ \ / _  |/ ___) ___ )/___)/___)/ _ \ / ___)    |   |
+  | |   | |  | |_| | (_| | |   | __)_|___ |___ | |_| | |       / / \ \
+  |_|   |_|   \___/ \___ |_|   |_____)___/(___/ \___/|_|      |_|   |_|
+                    (___/
+
+'
+
+  # Variables.
+  local CMD
+  local arguments
+  local progress_update_interval
+  local BUFFER
+
+  declare -A colors
+
+  BAR_STYLE=("=")
+  BAR_LENGTH=${#BAR_STYLE[@]}
+  PROCESS_FINISHED=0
+
+
+  CMD=$1
+  arguments=("${@:2}")
+  progress_update_interval=0.5
+
+
+  #
+  # Colors
+  #
+  declare_colors()
+  {
+
+    declare -A cl
+    declare -A styles
+    declare -A gen
+
+    cl[black]='30';
+    cl[red]='31';
+    cl[grey]='32';
+    cl[yellow]='33';
+    cl[blue]='34';
+    cl[purple]='35';
+    cl[cyan]='36';
+    cl[white]='37';
+
+    for i in "${(@k)cl[@]}"
+    do
+      colors["${i}"]="0;${cl[$i]}m"
+      colors["${i}.bold"]="1;${cl[$i]}m"
+      colors["${i}.underline"]="4;${cl[$i]}m"
+      colors["${i}.italic"]="0;$((${cl[$i]}+60))m"
+      colors["${i}.bold.intens"]="1;$((${cl[$i]}+60))m"
+      colors["bg.${i}"]="$((${cl[$i]}+10))m"
+      colors["bg.${i}.intens"]="0;$((${cl[$i]}+70))m"
+    done
+
+  }
+
+
+
+  declare_helpers()
+  {
+
+    #
+    execute ()
+    {
+      local st
+      local bf
+
+      bf=$($CMD ${arguments[@]} &>/dev/null &)
+      st=$?
+
+      test $st -eq 0 && echo "success" || echo "$bf"
+    }
+
+    # Simple output
+    ecc()
+    {
+      printf "$1"
+    }
+
+
+    # Push string to $BUFFER
+    #
+    # String -> Nothing
+    #
+    buffer()
+    {
+      BUFFER="${BUFFER}${1}"
+    }
+
+
+    # Output ${BUFFER}
+    #
+    # IO
+    #
+    buffer_flush()
+    {
+      local ln=0
+      ln=$(($(echo "${BUFFER}" | wc -l) + 0))
+      printf "${BUFFER}"
+      echo "$(esc)${ln}A"
+      BUFFER=""
+    }
+
+
+    show_usage()
+    {
+      man $CMD
+      exit 1;
+    }
+
+
+    colorit()
+    {
+      local txt=$1
+      local stl=$2
+      local reset='0m'    # Text Reset
+
+      echo "$(esc)${colors[\"$stl\"]}${txt}$(esc)${reset}"
+    }
+
+
+    esc()
+    {
+      local esc='\033'
+      local csi='['
+
+      echo ${esc}${csi}
+    }
+
+
+    show_error()
+    {
+      # \e didn't work in my MacBook...
+      colorit "\n${1}\n" red
+      exit
+    }
+
+
+    hide_cursor()
+    {
+      tput civis -- invisible
+    }
+
+
+    progress_part()
+    {
+      local i=$((${1}%${BAR_LENGTH}+1))
+      echo "${BAR_STYLE[${i}]}"
+    }
+
+
+    progress_bar()
+    {
+      local pct
+      local pctp
+      local rmn
+      local c
+
+      pct=$1
+      pctp=$(bc <<< "scale=0; 100 * $pct")
+      pctp=${pctp%.*}
+
+      # Replace empty to 0
+      if [ "${pctp}" -eq "" ]; then
+        pctp=0
+      fi
+
+      rmn=$((100 - $pctp))
+
+      buffer "\r["
+
+      # Done!!
+      c=0
+      while IFS= [ $c -lt $pctp ];
+      do
+        buffer $(progress_part ${c})
+        let c++
+      done
+
+      # Remains process
+      c=0
+      while IFS= [ $c -lt $rmn ];
+      do
+        buffer "."
+        let c++
+      done
+
+      buffer "] $pctp%%"
+
+
+      if [ $(bc <<< "$pct >= 1") -eq 1 ];then
+        PROCESS_FINISHED=1
+      fi
+    }
+
+  }
+
+
+
+
+  init()
+  { #-------------------------------------------
+    # Main
+    #-------------------------------------------
+
+    local funk
+    local required
+
+    clear
+
+
+
+    funk="_progressor_assistant_${CMD}"; #funktion!!
+    required=('process' 'percentage' 'define' 'execute')
+
+
+    colorit $TITLE"\n" blue
+    colorit "Executing: " yellow
+
+    echo "${CMD} ${arguments[@]}"
+    echo "-------------------------------------------"
+    sleep 2
+
+    # call initializing wrapper.
+    # check callable.
+    type $funk >/dev/null && eval $funk || show_error "$CMD wrapper does not exist"
+
+    for f in $required;
+    do
+      type $f &>/dev/null && sleep 0 || show_error "Method ${f} is required."
+    done
+
+  }
+
+
+  init_ui()
+  {
+    hide_cursor
+    echo "\n";
+  }
+
+
+
+
+  # Wrapper for specific command
+  # CMD: cp
+  #
+  _progressor_assistant_cp ()
+  {
+
+    local src_file
+    local dst_file
+    local orig_size
+    local dest_size
+
+
+    define()
+    { #-------------------------------------------
+      # Define variables.
+      #
+
+      for arg in ${arguments[@]}
+      do
+        if [[ "$arg" =~ ^- ]];then
+          echo "$arg is an option!"
+        else
+          if [ "$src_file" = "" ];then
+            src_file=$arg
+          else
+            dst_file=$arg
+          fi
+        fi
+      done
+
+      echo "Source: "$src_file
+      echo "Dest  : "$dst_file
+
+      if [ -e $dst_file ]; then
+        colorit "Destination file/dir already exists!!\n" red.bold
+        colorit "Do you want to delete previously created file/dir? (y/n)\n" red.bold
+
+        read yesno
+
+        case $yesno in
+          [Yy]) rm $dst_file && colorit "\n ==> Deleted!!\n" yellow; sleep 1;
+            ;;
+          [Nn]) show_error "Aborted."
+            ;;
+        esac
+      fi
+
+      orig_size=$(get_size ${src_file})
+      dest_size=0
+
+      if [ $orig_size -eq 0 ];then
+        echo "Faied to fetch file/dir size."
+        exit
+      fi
+    }
+
+    process()
+    { #-------------------------------------------
+      # While looping, update defined variables.
+      #
+      dest_size=$(get_size $dst_file)
+    }
+
+    percentage()
+    {
+      local pct
+      pct=$(($dest_size*1.0/$orig_size))
+      echo "$pct"
+    }
+
+    progress_message()
+    {
+
+      if [ $dest_size -gt 1000 ];then
+        dest_size=$(($dest_size/1000))
+        dest_size=$(round $dest_size 2)
+      fi
+
+      buffer "\nCopied size: ${dest_size} byte.\r"
+    }
+
+    round()
+    {
+      local val=$1
+      local len=$2
+      local ret=val
+
+      ret=$(printf "%.${len}f" ${val})
+      echo "$ret"
+    }
+
+    # CMD: cp
+    # helper
+    get_size()
+    {
+      local d
+      d=$1
+      if [ -f ${d} ];then
+        echo $(stat -f %z ${d})
+      elif [ -d ${d} ];then
+        echo $(du ${d} | sed -e 's|^\([0-9]\{0,\}\)\(.*\)|\1|g')
+      else
+        echo 0
+      fi
+    }
+
+  }
+
+
+
+  #-------------------------------------------
+  # Main
+  #-------------------------------------------
+
+
+  declare_colors
+  declare_helpers
+  # Here we go.
+
+  init
+  define
+
+  result=$(execute)
+  if [ $result != "success" ];then
+    echo $(colorit "Command failed!" "red.bold")
+    echo $(colorit "$result" "red")
+    exit
+  fi
+
+
+
+  # Force loop.
+
+  init_ui
+
+  while true;
+  do
+
+    process
+
+    local p=$(percentage)
+
+    progress_bar ${p}
+    progress_message "$pctp"
+
+    if [ $PROCESS_FINISHED -eq 1 ];then
+      buffer "\n\nProcess completed.\n"
+    fi
+
+    buffer_flush
+
+    if [ $PROCESS_FINISHED -eq 1 ];then
+      echo "\n\n\n"
+      exit
+    fi
+
+    sleep progress_update_interval
+
+  done
+}
+
+progressorX ${@:1}

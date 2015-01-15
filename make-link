@@ -1,0 +1,20 @@
+# !/bin/bash
+
+curdir=$(pwd)
+name=${1}
+file=$(echo ${name} | sed -e "s/.sh$//g")
+file="/usr/local/bin/${file}"
+
+if [ ! -f "${curdir}/make-link" ];then
+  echo "You have to be in source directory."
+  exit
+fi
+
+if [ -f $file ];then
+  echo "${name} is already linked."
+  exit
+fi
+
+ln -s $(pwd)/${name} $file
+echo "${name} linked."
+exit

@@ -1,0 +1,12 @@
+#!/bin/bash
+
+name=${1}
+src="/usr/local/bin/$name"
+
+if [ ! -f $src ];then
+  echo "$name is not linked."
+  exit
+fi
+
+rm /usr/local/bin/${name} 2> /dev/null
+echo "Removed ${name}"
